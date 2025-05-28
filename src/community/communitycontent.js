@@ -100,7 +100,7 @@ function ArticlesSection() {
         "From organic and plastic to electronic and industrial — learn the categories of waste and how each should be handled.",
       tag: "Awareness",
       image: "/types.png",
-      link: "https://www.conserve-energy-future.com/types-of-waste.php",
+      link: "https://takanimali.org/blog/?read=understanding-the-different-types-of-waste-and-their-impact-on-the-environment",
     },
     {
       title: "Safe Disposal of Electronic Waste (E-Waste)",
@@ -116,7 +116,7 @@ function ArticlesSection() {
         "Learn how to embrace a zero-waste lifestyle through practical tips and sustainable daily habits.",
       tag: "Lifestyle",
       image: "/zero.png",
-      link: "https://www.zerowastehome.com/",
+      link: "https://www.nature.org/en-us/about-us/where-we-work/united-states/delaware/stories-in-delaware/delaware-eight-ways-to-reduce-waste/",
     }
   ];
 

@@ -12,7 +12,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import Button from '@mui/material/Button';
 import { Alert } from '@mui/material';
-import GoogleIcon from '@mui/icons-material/Google'; // optional Google icon
+import GoogleIcon from '@mui/icons-material/Google'; 
 import { useSignIn } from "@clerk/clerk-react"
 
 function LogIn() {

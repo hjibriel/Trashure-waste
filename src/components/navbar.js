@@ -11,16 +11,10 @@ export default function Navbar({ isSidebarOpen }) {
   const [loading, setLoading] = React.useState(true);
   const { user } = useUser();
 
-  React.useEffect(() => {
-    if (user) {
-      fetchTotalPoints();
-    }
-  }, [user]);
-
-  const fetchTotalPoints = async () => {
+  const fetchTotalPoints = React.useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      // Fetch collections and reports to calculate total points
       const [collectionsRes, reportsRes] = await Promise.all([
         fetch('http://localhost:5000/api/collect'),
         fetch('http://localhost:5000/api/reportwaste')
@@ -35,11 +29,9 @@ export default function Navbar({ isSidebarOpen }) {
         reportsRes.json()
       ]);
 
-      // Filter user's data
       const userCollections = collectionsData.filter(c => c.user_id === user.id);
       const userReports = reportsData.filter(r => r.user_id === user.id);
 
-      // Calculate total points
       const collectionPoints = userCollections.reduce((sum, c) => sum + (c.points_earned || 0), 0);
       const reportingPoints = userReports
         .filter(report => report.verification_status === 'Verified')
@@ -47,13 +39,12 @@ export default function Navbar({ isSidebarOpen }) {
 
       const calculatedTotal = collectionPoints + reportingPoints;
 
-      // Try to get stored total from userRewards, fallback to calculated
       try {
         const rewardsRes = await fetch('http://localhost:5000/api/userRewards');
         if (rewardsRes.ok) {
           const rewardsData = await rewardsRes.json();
           const userReward = rewardsData.find(r => r.user_id === user.id);
-          
+
           if (userReward && userReward.total_points !== undefined) {
             setTotalPoints(userReward.total_points);
           } else {
@@ -66,14 +57,17 @@ export default function Navbar({ isSidebarOpen }) {
         console.error('Error fetching stored rewards, using calculated:', error);
         setTotalPoints(calculatedTotal);
       }
-
     } catch (error) {
       console.error("Failed to fetch total points:", error);
       setTotalPoints(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  React.useEffect(() => {
+    fetchTotalPoints();
+  }, [fetchTotalPoints]);
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -90,7 +84,6 @@ export default function Navbar({ isSidebarOpen }) {
       >
         <Toolbar sx={{ minHeight: 50, justifyContent: "flex-end" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            {/* Points Display */}
             <Box sx={{ 
               display: "flex", 
               alignItems: "center", 
@@ -108,8 +101,6 @@ export default function Navbar({ isSidebarOpen }) {
                 pts
               </Typography>
             </Box>
-            
-            {/* User Profile */}
             <Tooltip title="Profile">
               <UserButton />
             </Tooltip>

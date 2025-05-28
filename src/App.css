@@ -297,7 +297,7 @@
   background-color: #45a049;
 }
 
-/* Profile Form */
+
 .profile-form {
   display: flex;
   flex-direction: column;
@@ -681,4 +681,554 @@ button[disabled] {
   color: #9381ff; 
   font-size: 1.2rem;
   font-weight: 500;
+}
+
+
+
+
+
+
+
+
+
+/* Main container styles */
+.main-container {
+  min-height: 100vh;
+  background-color: #F4FFF6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+.content-grid {
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* Loading container */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+/* Balance card styles */
+.balance-card {
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fff9 100%);
+}
+
+.progress-container {
+  position: relative;
+  display: inline-flex;
+  margin-top: 16px;
+}
+
+.progress-text {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breakdown-container {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #E8F5E9;
+  border-radius: 8px;
+  border: 1px solid #C8E6C9;
+}
+
+/* Transactions card styles */
+.transactions-card {
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.transaction-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px;
+  background-color: #E8F5E9;
+  border-radius: 8px;
+  border-left: 4px solid #4CAF50;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.transaction-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.no-transactions {
+  text-align: center;
+  padding: 32px 0;
+  color: #666;
+  font-style: italic;
+}
+
+/* Redeem card styles */
+.redeem-card {
+  padding: 24px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  border-radius: 16px;
+  border: 2px solid #4CAF50;
+}
+
+/* Button styles */
+.redeem-button {
+  background-color: #2E7D32 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 12px 24px !important;
+  border-radius: 8px !important;
+  text-transform: none !important;
+  transition: all 0.3s ease !important;
+}
+
+.redeem-button:hover {
+  background-color: #1B5E20 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3) !important;
+}
+
+.redeem-button:disabled {
+  background-color: #A5D6A7 !important;
+  color: #666 !important;
+  transform: none !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+.paypal-button {
+  border: 2px solid #0070BA !important;
+  color: #0070BA !important;
+  font-weight: 600 !important;
+  padding: 12px 24px !important;
+  border-radius: 8px !important;
+  text-transform: none !important;
+  background-color: #ffffff !important;
+  transition: all 0.3s ease !important;
+}
+
+.paypal-button:hover {
+  background-color: #0070BA !important;
+  color: white !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 112, 186, 0.3) !important;
+}
+
+.paypal-button:disabled {
+  border-color: #ccc !important;
+  color: #999 !important;
+  background-color: #f5f5f5 !important;
+  transform: none !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+/* PayPal dialog styles */
+.paypal-summary {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  margin-top: 16px;
+}
+
+.paypal-summary .MuiTypography-subtitle2 {
+  color: #2E7D32;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.paypal-summary .MuiTypography-body2 {
+  margin: 4px 0;
+  color: #555;
+}
+
+/* Enhanced dialog styles */
+.MuiDialog-paper {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+.MuiDialogTitle-root {
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  border-bottom: 1px solid #C8E6C9;
+}
+
+.MuiDialogContent-root {
+  padding: 24px !important;
+}
+
+.MuiDialogActions-root {
+  padding: 16px 24px !important;
+  background-color: #fafafa;
+}
+
+/* Form field styles */
+.MuiTextField-root {
+  margin-bottom: 16px !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root {
+  border-radius: 8px !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #4CAF50 !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #2E7D32 !important;
+  border-width: 2px !important;
+}
+
+.MuiFormHelperText-root {
+  color: #666 !important;
+  font-size: 12px !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .main-container {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+  
+  .balance-card {
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  
+  .transactions-card {
+    padding: 16px;
+  }
+  
+  .redeem-card {
+    padding: 16px;
+  }
+  
+  .breakdown-container {
+    margin-top: 16px;
+    padding: 12px;
+  }
+  
+  .transaction-item {
+    padding: 12px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .redeem-button,
+  .paypal-button {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+  }
+  
+  .MuiDialog-paper {
+    margin: 16px !important;
+    max-height: calc(100vh - 32px) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-container {
+    padding: 12px;
+    padding-top: 20px;
+  }
+  
+  .balance-card {
+    padding: 16px;
+  }
+  
+  .progress-container .MuiCircularProgress-root {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .progress-text .MuiTypography-h4 {
+    font-size: 1.5rem;
+  }
+  
+  .breakdown-container .MuiGrid-item {
+    text-align: center;
+  }
+  
+  .redeem-card .MuiTypography-h5 {
+    font-size: 1.2rem;
+  }
+  
+  .redeem-button,
+  .paypal-button {
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Success/Error states */
+.success-state {
+  background-color: #d4edda !important;
+  border-color: #c3e6cb !important;
+  color: #155724 !important;
+}
+
+.error-state {
+  background-color: #f8d7da !important;
+  border-color: #f5c6cb !important;
+  color: #721c24 !important;
+}
+
+.warning-state {
+  background-color: #fff3cd !important;
+  border-color: #ffeaa7 !important;
+  color: #856404 !important;
+}
+
+/* Loading spinner overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  border-radius: inherit;
+}
+
+/* Custom scrollbar for transaction list */
+.transactions-card .MuiStack-root {
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4CAF50 #f1f1f1;
+}
+
+.transactions-card .MuiStack-root::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transactions-card .MuiStack-root::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.transactions-card .MuiStack-root::-webkit-scrollbar-thumb {
+  background: #4CAF50;
+  border-radius: 3px;
+}
+
+.transactions-card .MuiStack-root::-webkit-scrollbar-thumb:hover {
+  background: #2E7D32;
+}
+
+/* Tooltip styles for additional information */
+.info-tooltip {
+  background-color: #2E7D32 !important;
+  color: white !important;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+}
+
+/* Focus states for accessibility */
+.redeem-button:focus,
+.paypal-button:focus {
+  outline: 2px solid #4CAF50;
+  outline-offset: 2px;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root:focus-within {
+  box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+}
+
+/* Skeleton loaders */
+.skeleton-loader {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Card hover effects */
+.balance-card:hover,
+.transactions-card:hover,
+.redeem-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* Points display styles */
+.points-display {
+  background: linear-gradient(135deg, #4CAF50, #2E7D32);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(46, 125, 50, 0.1);
+}
+
+/* Currency display styles */
+.currency-display {
+  color: #0070BA;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* Status indicators */
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-success {
+  background-color: #4CAF50;
+}
+
+.status-pending {
+  background-color: #FF9800;
+}
+
+.status-error {
+  background-color: #f44336;
+}
+
+
+@media print {
+  .main-container {
+    background-color: white !important;
+    padding: 0 !important;
+  }
+  
+  .redeem-card,
+  .balance-card,
+  .transactions-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    page-break-inside: avoid;
+  }
+  
+  .redeem-button,
+  .paypal-button {
+    display: none !important;
+  }
+  
+  .MuiDialog-root {
+    display: none !important;
+  }
+}
+
+/* Dark mode support (if needed) */
+@media (prefers-color-scheme: dark) {
+  .main-container {
+    background-color: #1a1a1a;
+    color: #ffffff;
+  }
+  
+  .balance-card,
+  .transactions-card {
+    background-color: #2d2d2d;
+    color: white;
+  }
+  
+  .breakdown-container,
+  .transaction-item {
+    background-color: #333333;
+    border-color: #4CAF50;
+  }
+  
+  .redeem-card {
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .redeem-button,
+  .paypal-button {
+    border: 2px solid currentColor !important;
+  }
+  
+  .transaction-item {
+    border: 2px solid #4CAF50 !important;
+  }
 }

@@ -12,13 +12,12 @@ app.use(express.json());
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(bodyParser.json()); // Needed to parse JSON bodies (like webhooks)
+app.use(bodyParser.json()); 
 
-// Use users.js for both regular user APIs and webhook POSTs
+
 const usersRoutes = require('./route/users');
-app.use('/api/users', usersRoutes); // This includes webhook POST at /api/users (POST)
+app.use('/api/users', usersRoutes); 
 
-// Other routes
 const reportwasteRoutes = require('./route/reportwaste');
 app.use('/api/reportwaste', reportwasteRoutes);
 

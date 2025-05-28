@@ -7,6 +7,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useOutletContext } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import axios from 'axios';
+import { verifyWasteImage, estimateWasteWeight } from '../utils/imageVerification';
 
 function Waste() {
   const { setAvailablePoints, availablePoints } = useOutletContext();
@@ -23,8 +24,10 @@ function Waste() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [userReports, setUserReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [verificationDetails, setVerificationDetails] = useState(null);
+  const [weightEstimation, setWeightEstimation] = useState(null);
 
-  const wasteTypes = ['Plastic', 'Paper', 'Metal', 'Organic', 'Mixed'];
+  const wasteTypes = ['Plastic', 'Paper', 'Metal', 'Organic', 'Mixed', 'Glass', 'Electronics'];
   const priorities = ['High', 'Medium', 'Low'];
 
   const fetchUserReports = useCallback(async () => {
@@ -52,62 +55,131 @@ function Waste() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file.');
-        return;
-      }
-      
-      // Validate file size (e.g., max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB.');
-        return;
-      }
-      
       setImage(file);
+      setVerificationStatus(null);
+      setVerificationDetails(null);
+      setWeightEstimation(null);
       setOpen(true);
     }
   };
 
   const handleVerify = async () => {
+    if (!image) {
+      alert('Please select an image first.');
+      return;
+    }
+
     setIsVerifying(true);
+    setVerificationStatus(null);
+    
     try {
-      // Simulate AI verification logic
-      // In a real app, you might send the image to an AI service for verification
+      // Use the utility function for image verification
+      const verificationResult = await verifyWasteImage(image);
       
-      // For now, simulate verification process
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      if (!verificationResult.success) {
+        setVerificationStatus('Failed');
+        alert(`❌ Verification failed: ${verificationResult.error}`);
+        setOpen(false);
+        return;
+      }
+
+      const analysisResult = verificationResult.data;
+      setVerificationDetails(analysisResult);
       
-      // Simulate verification result (90% chance of success for demo)
-      const isVerified = Math.random() > 0.1;
-      
-      if (isVerified) {
-        // Auto-detect waste type based on image (simulated)
-        const detectedTypes = ['Plastic', 'Paper', 'Metal', 'Organic'];
-        const randomType = detectedTypes[Math.floor(Math.random() * detectedTypes.length)];
-        
-        setWasteType(randomType);
+      // Estimate weight using utility function
+      const weightResult = await estimateWasteWeight(image, analysisResult.wasteTypes || ['general']);
+      if (weightResult.success) {
+        setWeightEstimation(weightResult.data);
+      }
+
+      // Determine verification status
+      if (analysisResult.isWaste && analysisResult.confidence >= 60) {
+        // Auto-select appropriate waste type based on detected types
+        const detectedType = mapWasteTypeToSelection(analysisResult.wasteTypes);
+        setWasteType(detectedType);
         setVerificationStatus('Verified');
-        alert(`Image verified! Detected waste type: ${randomType}`);
+        
+        const weightInfo = weightResult.success 
+          ? `\nEstimated Weight: ${weightResult.data.estimatedWeight}kg (${weightResult.data.weightRange.min}-${weightResult.data.weightRange.max}kg)`
+          : '';
+        
+        alert(`✅ Image verified successfully!\n\nDetected: ${detectedType}\nConfidence: ${analysisResult.confidence}%\nDescription: ${analysisResult.description}${weightInfo}`);
+      } else if (!analysisResult.isWaste) {
+        setVerificationStatus('Failed');
+        alert(`❌ Verification failed: No waste detected in the image.\n\nReason: ${analysisResult.reasoning}`);
       } else {
         setVerificationStatus('Failed');
-        alert('Verification failed. Please try uploading a clearer image.');
+        alert(`❌ Verification failed: Low confidence level (${analysisResult.confidence}%).\n\nPlease upload a clearer image of the waste.`);
       }
       
       setOpen(false);
     } catch (error) {
       console.error('Error during verification:', error);
       setVerificationStatus('Failed');
-      alert('Verification failed. Please try again.');
+      alert(`❌ Verification failed: ${error.message}\n\nPlease try again or contact support if the issue persists.`);
+      setOpen(false);
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  // Helper function to map detected waste types to our selection options
+  const mapWasteTypeToSelection = (detectedTypes) => {
+    if (!detectedTypes || detectedTypes.length === 0) return 'Mixed';
+    
+    const typeMapping = {
+      'plastic': 'Plastic',
+      'paper': 'Paper',
+      'metal': 'Metal',
+      'organic': 'Organic',
+      'glass': 'Glass',
+      'electronics': 'Electronics',
+      'general': 'Mixed'
+    };
+
+    // Return the first mapped type or Mixed if no match
+    for (const detected of detectedTypes) {
+      const mapped = typeMapping[detected.toLowerCase()];
+      if (mapped) return mapped;
+    }
+    
+    return 'Mixed';
   };
 
   const uploadImageToServer = async (imageFile) => {
     // In a real application, you would upload the image to a file storage service
     // For now, we'll simulate this and return a mock path
     return `uploads/waste_images/${Date.now()}_${imageFile.name}`;
+  };
+
+  const calculatePoints = (verificationDetails, weightEstimation) => {
+    let basePoints = 15; // Increased base points
+    let bonusPoints = 0;
+
+    // Confidence bonus
+    if (verificationDetails?.confidence >= 80) {
+      bonusPoints += 10;
+    } else if (verificationDetails?.confidence >= 70) {
+      bonusPoints += 5;
+    }
+
+    // Weight-based bonus
+    if (weightEstimation?.estimatedWeight > 5) {
+      bonusPoints += 15; // Large waste bonus
+    } else if (weightEstimation?.estimatedWeight > 2) {
+      bonusPoints += 8; // Medium waste bonus
+    }
+
+    // Priority bonus
+    if (priority === 'High') {
+      bonusPoints += 5;
+    }
+
+    return {
+      basePoints,
+      bonusPoints,
+      totalPoints: basePoints + bonusPoints
+    };
   };
 
   const handleSubmit = async (e) => {
@@ -129,6 +201,9 @@ function Waste() {
       // Upload image and get path
       const imagePath = await uploadImageToServer(image);
       
+      // Calculate points
+      const pointsCalculation = calculatePoints(verificationDetails, weightEstimation);
+      
       // Prepare payload for backend
       const payload = {
         user_id: user.id,
@@ -138,7 +213,12 @@ function Waste() {
         waste_type: wasteType,
         priority: priority.toLowerCase(),
         verification_status: 'Verified',
-        points_awarded: 10
+        points_awarded: pointsCalculation.totalPoints,
+        verification_confidence: verificationDetails?.confidence || 0,
+        verification_description: verificationDetails?.description || '',
+        estimated_weight: weightEstimation?.estimatedWeight || null,
+        weight_range_min: weightEstimation?.weightRange?.min || null,
+        weight_range_max: weightEstimation?.weightRange?.max || null
       };
 
       // Submit to backend
@@ -146,9 +226,12 @@ function Waste() {
       
       if (response.status === 201) {
         // Update points
-        setAvailablePoints(availablePoints + 10);
+        setAvailablePoints(availablePoints + pointsCalculation.totalPoints);
         
-        alert('Waste report submitted successfully! You earned 10 points.');
+        const pointsBreakdown = `Base: ${pointsCalculation.basePoints} + Bonus: ${pointsCalculation.bonusPoints} = ${pointsCalculation.totalPoints} points`;
+        const weightInfo = weightEstimation ? `\nEstimated weight: ${weightEstimation.estimatedWeight}kg` : '';
+        
+        alert(`✅ Waste report submitted successfully!\n${pointsBreakdown}${weightInfo}`);
         
         // Reset form
         resetForm();
@@ -176,6 +259,8 @@ function Waste() {
     setDescription('');
     setImage(null);
     setVerificationStatus(null);
+    setVerificationDetails(null);
+    setWeightEstimation(null);
   };
 
   return (
@@ -185,7 +270,7 @@ function Waste() {
           Report Improper Waste Disposal
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Help make your community cleaner and earn rewards!
+          Help make your community cleaner and earn rewards! Enhanced with smart verification.
         </Typography>
       </Box>
 
@@ -219,12 +304,12 @@ function Waste() {
       <Card elevation={5} sx={{ p: 4, bgcolor: '#f5f5f5' }}>
         <Box sx={{ bgcolor: '#2e7d32', color: 'white', p: 3, borderRadius: 2, mb: 3 }}>
           <Typography variant="h5" fontWeight="bold" gutterBottom>
-            Reporting Process
+            Smart Waste Reporting Process
           </Typography>
           <Typography variant="body2">1. Take a clear photo of the waste.</Typography>
-          <Typography variant="body2">2. Provide the location of the waste.</Typography>
-          <Typography variant="body2">3. Wait for verification.</Typography>
-          <Typography variant="body2">4. Earn rewards for verified reports!</Typography>
+          <Typography variant="body2">2. Smart verification analyzes image quality and content.</Typography>
+          <Typography variant="body2">3. Weight estimation helps assess environmental impact.</Typography>
+          <Typography variant="body2">4. Earn points based on quality, weight, and priority!</Typography>
         </Box>
 
         <Box component="form" onSubmit={handleSubmit}>
@@ -264,7 +349,7 @@ function Waste() {
                   </Typography>
                   {image && (
                     <Typography variant="caption" color="text.secondary">
-                      Click to change image
+                      Click to change image • Smart verification required
                     </Typography>
                   )}
                 </label>
@@ -292,7 +377,7 @@ function Waste() {
                 value={wasteType} 
                 onChange={(e) => setWasteType(e.target.value)} 
                 required
-                helperText="Auto-filled after image verification"
+                helperText="Auto-detected after verification"
                 disabled={!verificationStatus}
               >
                 {wasteTypes.map((type) => (
@@ -317,16 +402,33 @@ function Waste() {
 
             {verificationStatus && (
               <Grid item xs={12}>
-                <Typography 
-                  align="center" 
-                  sx={{ 
-                    color: verificationStatus === 'Verified' ? 'green' : 'red', 
-                    mb: 2,
-                    fontWeight: 'bold'
-                  }}
-                >
-                  {verificationStatus === 'Verified' ? '✅ Image Verified' : '❌ Verification Failed'}
-                </Typography>
+                <Box sx={{ textAlign: 'center', mb: 2 }}>
+                  <Typography 
+                    sx={{ 
+                      color: verificationStatus === 'Verified' ? 'green' : 'red', 
+                      fontWeight: 'bold',
+                      mb: 1
+                    }}
+                  >
+                    {verificationStatus === 'Verified' ? '✅ Smart Verification Successful' : '❌ Smart Verification Failed'}
+                  </Typography>
+                  {verificationDetails && verificationStatus === 'Verified' && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Confidence: {verificationDetails.confidence}% | 
+                        Type: {wasteType}
+                        {verificationDetails.confidence >= 80 && ' 🌟 High Quality Bonus!'}
+                      </Typography>
+                      {weightEstimation && (
+                        <Typography variant="body2" color="text.secondary">
+                          Estimated Weight: {weightEstimation.estimatedWeight}kg 
+                          ({weightEstimation.weightRange.min}-{weightEstimation.weightRange.max}kg range)
+                          {weightEstimation.estimatedWeight > 5 && ' 📦 Large Waste Bonus!'}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+                </Box>
               </Grid>
             )}
 
@@ -363,7 +465,7 @@ function Waste() {
           maxHeight: '80vh',
           overflow: 'auto'
         }}>
-          <Typography variant="h6" mb={2}>Verify Waste Image</Typography>
+          <Typography variant="h6" mb={2}>Smart Image Verification</Typography>
           {image && (
             <Box sx={{ mb: 2 }}>
               <img 
@@ -382,6 +484,9 @@ function Waste() {
               </Typography>
             </Box>
           )}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Smart verification will analyze this image for waste detection, type classification, and weight estimation.
+          </Typography>
           <Button 
             onClick={handleVerify} 
             variant="contained" 
@@ -389,7 +494,7 @@ function Waste() {
             disabled={isVerifying}
             sx={{ mt: 2, mr: 1 }}
           >
-            {isVerifying ? 'Verifying...' : 'Verify Image'}
+            {isVerifying ? 'Analyzing...' : 'Verify Image'}
           </Button>
           <Button 
             onClick={() => setOpen(false)} 
@@ -403,7 +508,13 @@ function Waste() {
       </Modal>
 
       {/* Recent Reports */}
-      {userReports.length > 0 && (
+      {loading ? (
+        <Card elevation={3} sx={{ mt: 3, p: 3, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            Loading your reports...
+          </Typography>
+        </Card>
+      ) : userReports.length > 0 ? (
         <Card elevation={3} sx={{ mt: 3, p: 3 }}>
           <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32' }}>
             Your Recent Reports
@@ -414,10 +525,20 @@ function Waste() {
                 <Card variant="outlined" sx={{ p: 2, height: '100%' }}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     {report.waste_type} • {report.priority}
+                    {report.verification_confidence && (
+                      <span style={{ fontSize: '0.8em', marginLeft: '8px' }}>
+                        🎯 {report.verification_confidence}%
+                      </span>
+                    )}
                   </Typography>
                   <Typography variant="body2" noWrap>
                     📍 {report.location}
                   </Typography>
+                  {report.estimated_weight && (
+                    <Typography variant="body2" sx={{ fontSize: '0.8em', color: 'text.secondary' }}>
+                      ⚖️ ~{report.estimated_weight}kg
+                    </Typography>
+                  )}
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     Status: <span style={{ 
                       color: report.verification_status === 'Verified' ? 'green' : 'orange' 
@@ -434,6 +555,15 @@ function Waste() {
               </Grid>
             ))}
           </Grid>
+        </Card>
+      ) : (
+        <Card elevation={3} sx={{ mt: 3, p: 3, textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32' }}>
+            No Reports Yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Submit your first waste report to start earning points!
+          </Typography>
         </Card>
       )}
     </Container>

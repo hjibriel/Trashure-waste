@@ -1,5 +1,4 @@
 import '../App.css'
-/* import { useState } from 'react'; */
 import { styled } from '@mui/material/styles';
 import MuiDrawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
@@ -15,7 +14,6 @@ import HomeIcon from '@mui/icons-material/Home';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
-/* import Groups2Icon from '@mui/icons-material/Groups2'; */
 import SettingsIcon from '@mui/icons-material/Settings';
 import Typography from '@mui/material/Typography';
 

@@ -1,31 +1,30 @@
 import '../App.css';
-import React, { useState, useEffect } from 'react';
+import React, { useCallback,useState, useEffect } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import axios from 'axios';
+import { verifyWasteImage, estimateWasteWeight } from '../utils/imageVerification';
 
 function Collection() {
   const { user } = useUser();
   const [points, setPoints] = useState(0);
   const [activeForm, setActiveForm] = useState('collect');
   const [collectionData, setCollectionData] = useState({ location: '', weight: '', method: 'Self' });
-  const [pickupData, setPickupData] = useState({ 
-    preferred_date: '', preferred_time: '', location: '', 
-    waste_type: '', quantity: '', description: '' 
+  const [pickupData, setPickupData] = useState({
+    preferred_date: '', preferred_time: '', location: '',
+    waste_type: '', quantity: '', description: ''
   });
   const [scheduledPickups, setScheduledPickups] = useState([]);
   const [pastCollections, setPastCollections] = useState([]);
   const [editingPickupId, setEditingPickupId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [collectingPickupId, setCollectingPickupId] = useState(null);
+ 
+ 
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageVerification, setImageVerification] = useState(null);
+  const [isVerifyingImage, setIsVerifyingImage] = useState(false);
+  const [verificationError, setVerificationError] = ('');
 
-  useEffect(() => {
-    fetchPickups();
-    fetchCollections();
-    if (user) calculateTotalPoints();
-  }, [user]);
-
-  const calculateTotalPoints = async () => {
+  const calculateTotalPoints = useCallback(async () => {
     try {
       const collections = await fetchCollections();
       const userCollections = collections.filter(c => c.user_id === user.id);
@@ -34,7 +33,14 @@ function Collection() {
     } catch (err) {
       console.error('Error calculating points:', err);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchPickups();
+    fetchCollections();
+    if (user) calculateTotalPoints();
+  }, [user, calculateTotalPoints]);
+  
 
   const fetchPickups = async () => {
     try {
@@ -49,38 +55,74 @@ function Collection() {
   };
 
   const fetchCollections = async () => {
-    setLoading(true);
     try {
       const res = await fetch('http://localhost:5000/api/collect');
       const data = await res.json();
       setPastCollections(data);
-      setLoading(false);
+    
       return data;
     } catch (err) {
       console.error('Error fetching collections:', err);
-      setLoading(false);
+     
       return [];
     }
   };
+ 
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+   
+    if (file.size > 10 * 1024 * 1024) {
+      setVerificationError('Image size must be less than 10MB');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setVerificationError('Please select a valid image file');
+      return;
+    }
 
-  // Unified collection submission function
-  const submitCollection = async (collectionPayload, earnedPoints, pickupId = null) => {
+    setSelectedImage(file);
+    setImageVerification(null);
+    setVerificationError('');
+    setIsVerifyingImage(true);
+
     try {
-      await axios.post('http://localhost:5000/api/collect', collectionPayload);
-      
-      // If this was from a scheduled pickup, mark it as collected
-      if (pickupId) {
-        await axios.put(`http://localhost:5000/api/pickuprequest/${pickupId}`, { status: 'Collected' });
-        setScheduledPickups(scheduledPickups.filter(p => p.request_id !== pickupId));
+      const verificationResult = await verifyWasteImage(file);
+     
+      if (!verificationResult.success) {
+        setVerificationError(verificationResult.error);
+        setSelectedImage(null);
+        return;
       }
-      
-      setPoints(points + earnedPoints);
-      await fetchCollections(); // Refresh collections list
-      
-      return earnedPoints;
+
+      const verification = verificationResult.data;
+      setImageVerification(verification);
+
+      if (!verification.isWaste) {
+        setVerificationError('This image does not appear to contain waste materials. Please upload an image showing waste or recyclable materials.');
+        setSelectedImage(null);
+        return;
+      }
+     
+      if (!collectionData.weight && verification.wasteTypes.length > 0) {
+        try {
+          const weightResult = await estimateWasteWeight(file, verification.wasteTypes);
+          if (weightResult.success && weightResult.data.estimatedWeight) {
+            setCollectionData(prev => ({
+              ...prev,
+              weight: weightResult.data.estimatedWeight.toString()
+            }));
+          }
+        } catch (error) {
+          console.log('Weight estimation failed, continuing without it');
+        }
+      }
     } catch (error) {
-      console.error('Error submitting collection:', error);
-      throw error;
+      console.error('Error during image verification:', error);
+      setVerificationError('Failed to verify image. Please try again.');
+      setSelectedImage(null);
+    } finally {
+      setIsVerifyingImage(false);
     }
   };
 
@@ -93,34 +135,62 @@ function Collection() {
     }
   };
 
-  // Submit direct collection (self-collection)
+  // STANDARDIZED COLLECTION SUBMISSION FUNCTION
+  const submitCollection = async (collectionPayload) => {
+    try {
+      console.log('Submitting collection with payload:', collectionPayload);
+      const response = await axios.post('http://localhost:5000/api/collect', collectionPayload);
+      console.log('Collection response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting collection:', error);
+      throw error;
+    }
+  };
+
   const handleCollectionSubmit = async (e) => {
     e.preventDefault();
+   
+    if (collectionData.method === 'Self' && (!selectedImage || !imageVerification || !imageVerification.isWaste)) {
+      alert('Please upload and verify an image of your waste collection before submitting.');
+      return;
+    }
+   
     setIsSubmitting(true);
     try {
       const earnedPoints = Math.round(parseFloat(collectionData.weight) * 6);
+      
+      // STANDARDIZED PAYLOAD STRUCTURE
       const payload = {
         user_id: user.id,
         location: collectionData.location,
         weight: parseFloat(collectionData.weight),
         method: collectionData.method,
-        points_earned: earnedPoints
+        points_earned: earnedPoints,
+        verified: true,
+        waste_types: imageVerification?.wasteTypes || [],
+        verification_confidence: imageVerification?.confidence || 0
       };
-      
-      await axios.post('http://localhost:5000/api/collect', payload);
-      setPoints(points + earnedPoints);
-      await fetchCollections(); // Refresh collections list
+     
+      await submitCollection(payload);
       alert(`Collection submitted! You earned ${earnedPoints} points.`);
+      setPoints(prevPoints => prevPoints + earnedPoints);
+     
+      // Reset form
       setCollectionData({ location: '', weight: '', method: 'Self' });
+      setSelectedImage(null);
+      setImageVerification(null);
+      setVerificationError('');
+     
+      await fetchCollections();
     } catch (error) {
-      console.error('Collection error:', error.response || error);
-      alert(`Failed to submit collection: ${error.response?.data?.message || error.message}`);
+      console.error('Error submitting collection:', error);
+      alert('Failed to submit collection.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Submit new or edit pickup schedule
   const handlePickupSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -146,7 +216,8 @@ function Collection() {
           description: pickupData.description,
           location: pickupData.location,
           preferred_date: pickupData.preferred_date,
-          preferred_time: pickupData.preferred_time
+          preferred_time: pickupData.preferred_time,
+          status: 'scheduled'
         };
 
         let assignedPoints = 0;
@@ -154,6 +225,7 @@ function Collection() {
           assignedPoints = Math.round(parseFloat(collectionData.weight) * 10);
           payload.estimatedWeight = parseFloat(collectionData.weight);
           payload.assignedCollection = true;
+          payload.isAssigned = true;
         }
 
         await axios.post('http://localhost:5000/api/pickuprequest', payload);
@@ -170,7 +242,6 @@ function Collection() {
           setCollectionData({ location: '', weight: '', method: 'Self' });
         }
       }
-
       setPickupData({ preferred_date: '', preferred_time: '', location: '', waste_type: '', quantity: '', description: '' });
     } catch (error) {
       console.error('Error submitting pickup:', error);
@@ -180,123 +251,9 @@ function Collection() {
     }
   };
 
-  // NEW: Unified collection handler for scheduled waste
-  const handleCollectScheduledWaste = async (pickup, actualWeight) => {
-    if (!actualWeight || actualWeight <= 0) {
-      alert('Please enter a valid weight for the collected waste.');
-      return;
-    }
 
-    setCollectingPickupId(pickup.request_id);
-    try {
-      // Use the same point calculation as direct collection (6 pts/kg for self-collection)
-      const earnedPoints = Math.round(parseFloat(actualWeight) * 6);
-      
-      // Try the full payload first
-      let collectionPayload = {
-        user_id: user.id,
-        location: pickup.location,
-        weight: parseFloat(actualWeight),
-        method: 'Self',
-        points_earned: earnedPoints,
-        pickup_request_id: pickup.request_id,
-        waste_type: pickup.waste_type,
-        collected_date: new Date().toISOString().split('T')[0],
-        collected_time: new Date().toTimeString().split(' ')[0]
-      };
-
-      console.log('Attempting collection with full payload:', collectionPayload);
-
-      let collectionResponse;
-      try {
-        // Try with full payload first
-        collectionResponse = await axios.post('http://localhost:5000/api/collect', collectionPayload);
-      } catch (fullPayloadError) {
-        console.log('Full payload failed, trying minimal payload...');
-        
-        // If full payload fails, try minimal payload (same as direct collection)
-        const minimalPayload = {
-          user_id: user.id,
-          location: pickup.location,
-          weight: parseFloat(actualWeight),
-          method: 'Self',
-          points_earned: earnedPoints
-        };
-        
-        console.log('Attempting collection with minimal payload:', minimalPayload);
-        collectionResponse = await axios.post('http://localhost:5000/api/collect', minimalPayload);
-      }
-      
-      console.log('Collection successful:', collectionResponse.data);
-      
-      // Then update the pickup status to 'Collected'
-      const statusPayload = { status: 'Collected' };
-      console.log('Updating pickup status:', statusPayload);
-      
-      try {
-        const statusResponse = await axios.put(`http://localhost:5000/api/pickuprequest/${pickup.request_id}`, statusPayload);
-        console.log('Status update successful:', statusResponse.data);
-      } catch (statusError) {
-        console.warn('Status update failed, but collection was successful:', statusError);
-        // Don't throw here - collection was successful, status update is secondary
-      }
-      
-      // Update local state immediately to reflect the change
-      setScheduledPickups(prevPickups => 
-        prevPickups.map(p => 
-          p.request_id === pickup.request_id 
-            ? { ...p, status: 'Collected' }
-            : p
-        )
-      );
-      
-      setPoints(points + earnedPoints);
-      await fetchCollections(); // Refresh collections list
-      alert(`Scheduled waste collected! You earned ${earnedPoints} points.`);
-      
-    } catch (error) {
-      console.error('Collection error details:', error);
-      
-      // More detailed error logging
-      if (error.response) {
-        console.error('Error response data:', error.response.data);
-        console.error('Error response status:', error.response.status);
-        console.error('Error response headers:', error.response.headers);
-        
-        // Try to get more specific error message
-        let errorMessage = 'Server error';
-        if (error.response.data) {
-          if (typeof error.response.data === 'string') {
-            errorMessage = error.response.data;
-          } else if (error.response.data.message) {
-            errorMessage = error.response.data.message;
-          } else if (error.response.data.error) {
-            errorMessage = error.response.data.error;
-          } else {
-            errorMessage = JSON.stringify(error.response.data);
-          }
-        }
-        
-        alert(`Failed to collect scheduled waste: ${errorMessage}`);
-      } else if (error.request) {
-        console.error('Error request:', error.request);
-        alert('Failed to collect scheduled waste: No response from server');
-      } else {
-        console.error('Error message:', error.message);
-        alert(`Failed to collect scheduled waste: ${error.message}`);
-      }
-    } finally {
-      setCollectingPickupId(null);
-    }
-  };
 
   const handleEditPickup = (pickup) => {
-    // Prevent editing if the pickup has been collected
-    if (pickup.status && pickup.status.toLowerCase() === 'collected') {
-      alert('Cannot edit collected waste pickups.');
-      return;
-    }
-
     setPickupData({
       preferred_date: pickup.preferred_date,
       preferred_time: pickup.preferred_time,
@@ -309,17 +266,11 @@ function Collection() {
     setActiveForm('schedule');
   };
 
-  const handleDeletePickup = async (pickup) => {
-    // Prevent deletion if the pickup has been collected
-    if (pickup.status && pickup.status.toLowerCase() === 'collected') {
-      alert('Cannot delete collected waste pickups.');
-      return;
-    }
-
+  const handleDeletePickup = async (id) => {
     if (window.confirm('Delete this pickup?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/pickuprequest/${pickup.request_id}`);
-        setScheduledPickups(scheduledPickups.filter(p => p.request_id !== pickup.request_id));
+        await axios.delete(`http://localhost:5000/api/pickuprequest/${id}`);
+        setScheduledPickups(scheduledPickups.filter(p => p.request_id !== id));
         alert('Pickup deleted!');
       } catch (error) {
         console.error('Error deleting pickup:', error);
@@ -334,22 +285,15 @@ function Collection() {
     return Math.round(parseFloat(collectionData.weight) * rate);
   };
 
-  // Filter scheduled pickups that are NOT collected yet
-  const uncollectedScheduledPickups = scheduledPickups.filter(p => 
-    p.user_id === user?.id && (!p.status || p.status.toLowerCase() !== 'collected')
-  );
-
-  // Filter all user's scheduled pickups (including collected ones for display)
-  const userScheduledPickups = scheduledPickups.filter(p => p.user_id === user?.id);
+  
 
   return (
     <div className="container" style={{ backgroundColor: "#f9f9f9", minHeight: "100vh", padding: "20px 40px", paddingTop: "80px", marginLeft: "200px", marginRight: "40px" }}>
       <h1 className="header">Waste Collection</h1>
-
-      <div className="button-toggle-group" style={{ marginBottom: 20 }}>
+      
+      <div className="button-toggle-group">
         <button className={activeForm === 'collect' ? 'active-tab' : ''} onClick={() => setActiveForm('collect')}>Collect</button>
         <button className={activeForm === 'schedule' ? 'active-tab' : ''} onClick={() => setActiveForm('schedule')}>Schedule Pickup</button>
-        <button className={activeForm === 'collectScheduled' ? 'active-tab' : ''} onClick={() => setActiveForm('collectScheduled')}>Collect Scheduled Waste</button>
       </div>
 
       <div className="points-summary">
@@ -366,9 +310,46 @@ function Collection() {
               onChange={(e) => setCollectionData({ ...collectionData, location: e.target.value })}
               required
             />
-            <input type="file" accept="image/*" />
+           
+            <div className="image-upload-section" style={{ margin: '15px 0', padding: '15px', border: '2px dashed #ccc', borderRadius: '8px', backgroundColor: '#f8f9fa' }}>
+              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+                Upload Image of Waste Collection *
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                required={collectionData.method === 'Self'}
+                style={{ marginBottom: '10px' }}
+              />
+             
+              {isVerifyingImage && (
+                <div style={{ color: '#007bff', fontStyle: 'italic' }}>
+                  🔍 Verifying image with AI...
+                </div>
+              )}
+             
+              {verificationError && (
+                <div style={{ color: '#dc3545', marginTop: '10px', padding: '10px', backgroundColor: '#f8d7da', borderRadius: '5px' }}>
+                  ❌ {verificationError}
+                </div>
+              )}
+             
+              {imageVerification && imageVerification.isWaste && (
+                <div style={{ color: '#28a745', marginTop: '10px', padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px' }}>
+                  ✅ <strong>Image Verified!</strong>
+                  <div style={{ marginTop: '5px', fontSize: '14px' }}>
+                    <p><strong>Detected:</strong> {imageVerification.description}</p>
+                    <p><strong>Waste Types:</strong> {imageVerification.wasteTypes.join(', ') || 'General waste'}</p>
+                    <p><strong>Confidence:</strong> {imageVerification.confidence}%</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <input
               type="number"
+              step="0.1"
               placeholder="Weight Collected (kg)"
               value={collectionData.weight}
               onChange={(e) => setCollectionData({ ...collectionData, weight: e.target.value })}
@@ -382,8 +363,24 @@ function Collection() {
 
             {collectionData.method === 'Self' && (
               <>
-                <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Collection'}</button>
-                <div className="earning-summary">This collection will earn you {calculateEstimatedPoints()} points</div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !imageVerification?.isWaste}
+                  style={{
+                    opacity: (!imageVerification?.isWaste) ? 0.6 : 1,
+                    cursor: (!imageVerification?.isWaste) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Collection'}
+                </button>
+                <div className="earning-summary">
+                  This collection will earn you {calculateEstimatedPoints()} points
+                </div>
+                {!imageVerification?.isWaste && (
+                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '5px' }}>
+                    Please upload and verify an image before submitting
+                  </div>
+                )}
               </>
             )}
 
@@ -407,7 +404,7 @@ function Collection() {
         <>
           <form onSubmit={handlePickupSubmit} className="form-container">
             <h2>{editingPickupId ? 'Edit Pickup' : collectionData.method === 'Assigned' ? 'Schedule Assigned Collection' : 'Schedule a Waste Pickup'}</h2>
-
+            
             {collectionData.method === 'Assigned' && (
               <div className="assigned-info" style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#e8f4ff', borderRadius: '5px' }}>
                 <p>Scheduling assigned collection of approx. {collectionData.weight} kg at {collectionData.location}</p>
@@ -418,171 +415,79 @@ function Collection() {
             <label>Waste Type</label>
             <select value={pickupData.waste_type} onChange={(e) => setPickupData({ ...pickupData, waste_type: e.target.value })} required>
               <option value="">Select waste type</option>
-              <option value="Plastic">Plastic</option>
-              <option value="Glass">Glass</option>
-              <option value="Paper">Paper</option>
-              <option value="Metal">Metal</option>
-              <option value="Other">Other</option>
+              <option value="general">General Waste</option>
+              <option value="plastic">Plastic</option>
+              <option value="paper">Paper/Cardboard</option>
+              <option value="electronics">Electronics</option>
+              <option value="glass">Glass</option>
+              <option value="metal">Metal</option>
+              <option value="hazardous">Hazardous Materials</option>
             </select>
 
-            <input
-              type="number"
-              min="1"
-              placeholder="Quantity (number of items)"
-              value={pickupData.quantity}
-              onChange={(e) => setPickupData({ ...pickupData, quantity: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Location"
-              value={pickupData.location}
-              onChange={(e) => setPickupData({ ...pickupData, location: e.target.value })}
-              required
-            />
-            <input
-              type="date"
-              value={pickupData.preferred_date}
-              onChange={(e) => setPickupData({ ...pickupData, preferred_date: e.target.value })}
-              required
-            />
-            <input
-              type="time"
-              value={pickupData.preferred_time}
-              onChange={(e) => setPickupData({ ...pickupData, preferred_time: e.target.value })}
-              required
-            />
-            <textarea
-              placeholder="Description (optional)"
-              value={pickupData.description}
-              onChange={(e) => setPickupData({ ...pickupData, description: e.target.value })}
-            />
+            <label>Quantity</label>
+            <select value={pickupData.quantity} onChange={(e) => setPickupData({ ...pickupData, quantity: e.target.value })} required>
+              <option value="">Select quantity</option>
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+              <option value="xl">Extra Large</option>
+            </select>
 
-            <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : editingPickupId ? 'Update Pickup' : 'Schedule Pickup'}</button>
+            <label>Description</label>
+            <textarea rows="3" placeholder="Additional details" value={pickupData.description} onChange={(e) => setPickupData({ ...pickupData, description: e.target.value })} />
+
+            <label>Location</label>
+            <input type="text" value={pickupData.location} onChange={(e) => setPickupData({ ...pickupData, location: e.target.value })} required />
+
+            <label>Preferred Date</label>
+            <input type="date" value={pickupData.preferred_date} onChange={(e) => setPickupData({ ...pickupData, preferred_date: e.target.value })} required />
+
+            <label>Preferred Time</label>
+            <select value={pickupData.preferred_time} onChange={(e) => setPickupData({ ...pickupData, preferred_time: e.target.value })} required>
+              <option value="">Select time</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+            </select>
+
+            <button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : (editingPickupId ? 'Update Pickup' : collectionData.method === 'Assigned' ? 'Schedule Assigned Collection' : 'Schedule Pickup')}
+            </button>
+
+            {collectionData.method === 'Assigned' && (
+              <button type="button" style={{ marginTop: '10px', backgroundColor: '#6c757d' }} onClick={() => { setCollectionData({ ...collectionData, method: 'Self' }); setActiveForm('collect'); }}>
+                Cancel Assigned Collection
+              </button>
+            )}
           </form>
 
-          <div className="scheduled-list" style={{ marginTop: '30px' }}>
-            <h3>Your Scheduled Pickups</h3>
-            {userScheduledPickups.length === 0 ? (
-              <p>No scheduled pickups yet.</p>
+          <div className="scheduled-pickups">
+            <h2>Your Scheduled Pickups</h2>
+            {scheduledPickups.filter(p => p.user_id === user.id).length === 0 ? (
+              <p>No pickups scheduled.</p>
             ) : (
-              userScheduledPickups.map(pickup => {
-                const isCollected = pickup.status && pickup.status.toLowerCase() === 'collected';
-                return (
-                  <div 
-                    key={pickup.request_id} 
-                    className="pickup-card" 
-                    style={{ 
-                      border: '1px solid #ddd', 
-                      padding: '10px', 
-                      marginBottom: '10px', 
-                      borderRadius: '6px',
-                      backgroundColor: isCollected ? '#f0f0f0' : '#fff',
-                      opacity: isCollected ? 0.7 : 1
-                    }}
-                  >
-                    <p><strong>Waste Type:</strong> {pickup.waste_type}</p>
-                    <p><strong>Quantity:</strong> {pickup.quantity}</p>
-                    <p><strong>Location:</strong> {pickup.location}</p>
-                    <p><strong>Date:</strong> {pickup.preferred_date}</p>
-                    <p><strong>Time:</strong> {pickup.preferred_time}</p>
-                    <p><strong>Description:</strong> {pickup.description || 'N/A'}</p>
-                    <p><strong>Status:</strong> <span style={{ color: isCollected ? '#4CAF50' : '#666' }}>{pickup.status || 'Pending'}</span></p>
-                    
-                    {!isCollected ? (
-                      <div>
-                        <button onClick={() => handleEditPickup(pickup)}>Edit</button>
-                        <button onClick={() => handleDeletePickup(pickup)} style={{ marginLeft: '10px' }}>Delete</button>
-                      </div>
-                    ) : (
-                      <div style={{ color: '#666', fontStyle: 'italic', marginTop: '10px' }}>
-                        This pickup has been collected and cannot be modified.
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              scheduledPickups.filter(p => p.user_id === user.id).map((pickup) => (
+                <div key={pickup.request_id} className="pickup-card">
+                  <p><strong>Waste Type:</strong> {pickup.waste_type}</p>
+                  <p><strong>Quantity:</strong> {pickup.quantity}</p>
+                  <p><strong>Location:</strong> {pickup.location}</p>
+                  <p><strong>Date:</strong> {pickup.preferred_date}</p>
+                  <p><strong>Time:</strong> {pickup.preferred_time}</p>
+                  <p><strong>Description:</strong> {pickup.description}</p>
+                  <p><strong>Status:</strong> {pickup.status || 'Pending'}</p>
+                  {pickup.assignedCollection && <p><strong>Type:</strong> Assigned</p>}
+                  {pickup.estimatedWeight && <p><strong>Est. Weight:</strong> {pickup.estimatedWeight} kg</p>}
+                  {(pickup.status !== 'collected') && (
+                    <>
+                      <button onClick={() => handleEditPickup(pickup)}>Edit</button>
+                      <button onClick={() => handleDeletePickup(pickup.request_id)}>Delete</button>
+                    </>
+                  )}
+                </div>
+              ))
             )}
           </div>
         </>
-      )}
-
-      {activeForm === 'collectScheduled' && (
-        <div className="collect-scheduled" style={{ marginTop: '20px' }}>
-          <h2>Scheduled Waste Available for Collection</h2>
-          {uncollectedScheduledPickups.length === 0 ? (
-            <p>No scheduled waste awaiting collection.</p>
-          ) : (
-            uncollectedScheduledPickups.map(pickup => (
-              <ScheduledWasteCard 
-                key={pickup.request_id} 
-                pickup={pickup} 
-                onCollect={handleCollectScheduledWaste}
-                isCollecting={collectingPickupId === pickup.request_id}
-              />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// NEW: Separate component for scheduled waste collection
-function ScheduledWasteCard({ pickup, onCollect, isCollecting }) {
-  const [actualWeight, setActualWeight] = useState('');
-
-  const handleCollect = () => {
-    onCollect(pickup, actualWeight);
-    setActualWeight(''); // Reset after collection
-  };
-
-  return (
-    <div className="pickup-card" style={{ 
-      border: '1px solid #ccc', 
-      padding: '15px', 
-      marginBottom: '12px', 
-      borderRadius: '6px', 
-      backgroundColor: '#fff' 
-    }}>
-      <p><strong>Waste Type:</strong> {pickup.waste_type}</p>
-      <p><strong>Quantity:</strong> {pickup.quantity}</p>
-      <p><strong>Location:</strong> {pickup.location}</p>
-      <p><strong>Date:</strong> {pickup.preferred_date}</p>
-      <p><strong>Time:</strong> {pickup.preferred_time}</p>
-      <p><strong>Description:</strong> {pickup.description || 'N/A'}</p>
-      
-      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <input
-          type="number"
-          step="0.1"
-          min="0.1"
-          placeholder="Actual weight (kg)"
-          value={actualWeight}
-          onChange={(e) => setActualWeight(e.target.value)}
-          style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
-          required
-        />
-        <button 
-          onClick={handleCollect}
-          disabled={isCollecting || !actualWeight}
-          style={{ 
-            padding: '8px 16px',
-            backgroundColor: actualWeight ? '#4CAF50' : '#ccc',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: actualWeight ? 'pointer' : 'not-allowed'
-          }}
-        >
-          {isCollecting ? 'Collecting...' : 'Collect'}
-        </button>
-      </div>
-      
-      {actualWeight && (
-        <div style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-          You'll earn {Math.round(parseFloat(actualWeight) * 6)} points (6 pts/kg)
-        </div>
       )}
     </div>
   );
